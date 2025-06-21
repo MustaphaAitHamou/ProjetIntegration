@@ -1,5 +1,4 @@
-version: "3.8"
-
+# docker-compose.yml
 services:
   db:
     image: mysql:8.0
@@ -21,7 +20,9 @@ services:
       - "8082:8080"
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     environment:
       DB_HOST: db
       DB_PORT: "3306"
@@ -36,9 +37,9 @@ services:
       - "5000:5000"
 
   frontend:
-    build: ./frontend
-    volumes:
-      - ./frontend:/app
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     environment:
       REACT_APP_API_URL: "http://localhost:5000"
     ports:
