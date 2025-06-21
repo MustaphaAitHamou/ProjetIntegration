@@ -1,26 +1,50 @@
 name: CI
-on: [push]
+
+on:
+  push:
+    branches: [ main ]
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      docker:
-        image: docker:20.10.16
-        options: --privileged
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Docker Compose
-        run: docker-compose up -d --build
-      - name: Backend Tests
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx  # nécessaire pour 'docker buildx'
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and start services
         run: |
-          cd backend && pytest --cov=app --cov-report=xml
+          docker compose up -d --build
+
+      - name: Wait for services to be healthy
+        run: |
+          # On attend que l'API soit dispo
+          docker compose exec -T backend sh -c 'until nc -z localhost 5000; do sleep 1; done'
+
+      - name: Run backend tests
+        run: |
+          docker compose exec -T backend pytest --maxfail=1 --disable-warnings -q
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
-      - name: Frontend Tests
+
+      - name: Run frontend tests
         run: |
-          cd frontend && npm ci && npm test -- --coverage
+          cd frontend
+          npm ci
+          npm test -- --coverage
+
       - name: Run Cypress E2E
         uses: cypress-io/github-action@v5
         with:
-          start: npm --prefix frontend start
+          start: docker compose up -d && npx wait-on http://localhost:3000 && sleep 5
           wait-on: http://localhost:3000
+          wait-on-timeout: 60
+
+      - name: Tear down services
+        if: always()
+        run: |
+          docker compose down --volumes
