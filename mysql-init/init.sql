@@ -1,0 +1,14 @@
+CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASSWORD}';
+GRANT ALL PRIVILEGES ON appdb.* TO '${DB_USER}'@'%';
+
+-- Create initial admin user
+USE appdb;
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(255) UNIQUE,
+  password VARCHAR(255),
+  is_admin BOOLEAN DEFAULT FALSE
+);
+INSERT INTO users (email, password, is_admin)
+VALUES ('${ADMIN_EMAIL}', '${ADMIN_PASSWORD}', TRUE)
+ON DUPLICATE KEY UPDATE email = email;

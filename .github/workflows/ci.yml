@@ -1,0 +1,26 @@
+name: CI
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      docker:
+        image: docker:20.10.16
+        options: --privileged
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Docker Compose
+        run: docker-compose up -d --build
+      - name: Backend Tests
+        run: |
+          cd backend && pytest --cov=app --cov-report=xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+      - name: Frontend Tests
+        run: |
+          cd frontend && npm ci && npm test -- --coverage
+      - name: Run Cypress E2E
+        uses: cypress-io/github-action@v5
+        with:
+          start: npm --prefix frontend start
+          wait-on: http://localhost:3000
