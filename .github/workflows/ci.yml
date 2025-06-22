@@ -1,3 +1,4 @@
+# .github/workflows/ci.yml
 name: CI
 
 on:
@@ -11,7 +12,6 @@ jobs:
     name: 🐍 Backend Tests
     runs-on: ubuntu-latest
 
-    # Variables d’environnement globales pour le job
     env:
       DB_HOST: 127.0.0.1
       DB_PORT: 3306
@@ -54,18 +54,17 @@ jobs:
             sleep 2
           done
 
-      - name: Run pytest
+      - name: Run pytest with XML coverage
         working-directory: backend
         env:
-          # Héritage de DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
           PYTHONPATH: ${{ github.workspace }}/backend
         run: |
-          pytest --maxfail=1 --disable-warnings --cov=.
+          pytest --maxfail=1 --disable-warnings --cov=. --cov-report xml:coverage.xml
 
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          files: ./backend/coverage.xml
+          files: backend/coverage.xml
           fail_ci_if_error: true
 
   frontend-tests:
@@ -95,7 +94,7 @@ jobs:
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          files: ./frontend/coverage/lcov.info
+          files: frontend/coverage/lcov.info
           fail_ci_if_error: true
 
   e2e-tests:
