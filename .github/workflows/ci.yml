@@ -1,3 +1,4 @@
+# .github/workflows/ci.yml
 name: CI
 
 on:
@@ -33,7 +34,7 @@ jobs:
         with:
           python-version: 3.11
 
-      - name: Install backend deps
+      - name: Install backend dependencies
         run: |
           pip install --upgrade pip
           pip install -r backend/requirements.txt
@@ -50,10 +51,12 @@ jobs:
 
       - name: Run pytest
         working-directory: backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend
         run: |
           pytest --maxfail=1 --disable-warnings --cov=.
 
-      - name: Upload coverage to Codecov
+      - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           files: ./backend/coverage.xml
@@ -73,7 +76,7 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install frontend deps
+      - name: Install frontend dependencies
         run: |
           cd frontend
           npm ci
@@ -83,7 +86,7 @@ jobs:
           cd frontend
           npm test -- --coverage --watchAll=false
 
-      - name: Upload coverage to Codecov
+      - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           files: ./frontend/coverage/lcov.info
@@ -113,7 +116,7 @@ jobs:
           cd backend
           pip install -r requirements.txt
           uvicorn app:app --host 0.0.0.0 --port 5000 &
-      
+
       - name: Start Frontend App
         run: |
           cd frontend
