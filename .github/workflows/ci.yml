@@ -64,6 +64,7 @@ jobs:
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: backend/coverage.xml
           fail_ci_if_error: true
 
@@ -94,6 +95,7 @@ jobs:
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: frontend/coverage/lcov.info
           fail_ci_if_error: true
 
