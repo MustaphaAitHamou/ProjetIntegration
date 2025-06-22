@@ -3,48 +3,65 @@ name: CI
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
+    services:
+      # Optionnel si vous voulez utiliser services.docker
+      docker:
+        image: docker:20.10.16
+        options: --privileged
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx  # nécessaire pour 'docker buildx'
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Build and start services
+      - name: Build & start services
         run: |
           docker compose up -d --build
 
-      - name: Wait for services to be healthy
+      - name: Wait for backend to be ready
         run: |
-          # On attend que l'API soit dispo
-          docker compose exec -T backend sh -c 'until nc -z localhost 5000; do sleep 1; done'
+          docker compose exec -T backend sh -c \
+            'until nc -z localhost 5000; do echo Waiting for API...; sleep 1; done'
 
       - name: Run backend tests
         run: |
           docker compose exec -T backend pytest --maxfail=1 --disable-warnings -q
 
-      - name: Upload coverage to Codecov
+      - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v3
+        with:
+          files: backend/coverage.xml
+          fail_ci_if_error: true
 
       - name: Run frontend tests
+        working-directory: frontend
         run: |
-          cd frontend
           npm ci
-          npm test -- --coverage
+          npm test -- --coverage --watchAll=false
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: frontend/coverage/lcov.info
+          fail_ci_if_error: true
+
+      - name: Wait for frontend to be ready
+        run: |
+          npx wait-on http://localhost:3000 && sleep 5
 
       - name: Run Cypress E2E
         uses: cypress-io/github-action@v5
         with:
-          start: docker compose up -d && npx wait-on http://localhost:3000 && sleep 5
-          wait-on: http://localhost:3000
-          wait-on-timeout: 60
+          browser: chrome
+          start: docker compose up -d frontend backend db && npx wait-on http://localhost:3000
 
-      - name: Tear down services
+      - name: Tear down
         if: always()
-        run: |
-          docker compose down --volumes
+        run: docker compose down --volumes
