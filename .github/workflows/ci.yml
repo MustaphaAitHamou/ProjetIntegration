@@ -1,3 +1,4 @@
+# .github/workflows/ci.yml
 name: CI
 
 on:
@@ -60,15 +61,6 @@ jobs:
         run: |
           pytest --maxfail=1 --disable-warnings --cov=. --cov-report xml:coverage.xml
 
-      - name: Check CODECOV_TOKEN exists
-        run: |
-          if [ -z "${{ secrets.CODECOV_TOKEN }}" ]; then
-            echo "🚨 CODECOV_TOKEN is empty!"
-            exit 1
-          else
-            echo "✅ CODECOV_TOKEN is set"
-          fi
-
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -76,4 +68,80 @@ jobs:
           files: backend/coverage.xml
           fail_ci_if_error: true
 
-  # … (les autres jobs restent inchangés)
+  frontend-tests:
+    name: ⚛️ Frontend Tests
+    runs-on: ubuntu-latest
+    needs: backend-tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run Jest & Coverage
+        run: |
+          cd frontend
+          npm test -- --coverage --watchAll=false
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: frontend/coverage/lcov.info
+          fail_ci_if_error: true
+
+  e2e-tests:
+    name: 🌐 E2E Tests with Cypress
+    runs-on: ubuntu-latest
+    needs: frontend-tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Start Backend API
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          uvicorn app:app --host 0.0.0.0 --port 5000 &
+
+      - name: Start Frontend App
+        run: |
+          cd frontend
+          npm ci
+          npm start &
+
+      - name: Wait for API & Frontend
+        run: |
+          npx wait-on http://localhost:5000/users
+          npx wait-on http://localhost:3000
+
+      - name: Run Cypress
+        uses: cypress-io/github-action@v5
+        with:
+          browser: chrome
+          record: false
+
+      - name: Tear down servers
+        if: always()
+        run: |
+          kill $(jobs -p) || true
