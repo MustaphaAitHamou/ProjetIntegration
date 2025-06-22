@@ -1,4 +1,3 @@
-# .github/workflows/ci.yml
 name: CI
 
 on:
@@ -9,7 +8,7 @@ on:
 
 jobs:
   backend-tests:
-    name: Backend Tests (FastAPI)
+    name: 🐍 Backend Tests
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -22,107 +21,117 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -uroot -p${{ github.event.repository.owner.login }}" 
-          --health-interval=10s 
-          --health-timeout=5s 
-          --health-retries=5
+          --health-cmd="mysqladmin ping -h localhost -uadmin -psecret"
+          --health-interval=10s --health-timeout=5s --health-retries=5
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: 3.11
 
-      - name: Install backend dependencies
+      - name: Install backend deps
         run: |
           pip install --upgrade pip
           pip install -r backend/requirements.txt
 
-      - name: Wait for MySQL to be ready
+      - name: Wait for MySQL
         run: |
           until mysqladmin ping -h "127.0.0.1" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent; do
             echo "Waiting for MySQL…"
-            sleep 3
+            sleep 2
           done
         env:
           MYSQL_USER: admin
           MYSQL_PASSWORD: secret
 
-      - name: Run backend unit & integration tests
+      - name: Run pytest
+        working-directory: backend
         run: |
-          cd backend
           pytest --maxfail=1 --disable-warnings --cov=.
 
-      - name: Upload backend coverage to Codecov
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           files: ./backend/coverage.xml
           fail_ci_if_error: true
 
   frontend-tests:
-    name: Frontend Tests (React/Jest)
+    name: ⚛️ Frontend Tests
     runs-on: ubuntu-latest
     needs: backend-tests
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
 
-      - name: Install frontend dependencies
+      - name: Install frontend deps
         run: |
           cd frontend
           npm ci
 
-      - name: Run Jest tests with coverage
+      - name: Run Jest & Coverage
         run: |
           cd frontend
           npm test -- --coverage --watchAll=false
 
-      - name: Upload frontend coverage to Codecov
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           files: ./frontend/coverage/lcov.info
           fail_ci_if_error: true
 
   e2e-tests:
-    name: E2E Tests (Cypress)
+    name: 🌐 E2E Tests with Cypress
     runs-on: ubuntu-latest
     needs: frontend-tests
-    services:
-      web:
-        image: node:18-alpine
-        ports:
-          - 3000:3000
-        volumes:
-          - ./:/app
-        working-directory: /app/frontend
-        command: sh -c "npm ci && npm start"
-
-      api:
-        image: python:3.11-slim
-        ports:
-          - 5000:5000
-        volumes:
-          - ./:/app
-        working-directory: /app/backend
-        command: sh -c "pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0"
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Wait for Frontend & API
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Start Backend API
         run: |
-          npx wait-on http://localhost:3000
-          npx wait-on http://localhost:5000/users
+          cd backend
+          pip install -r requirements.txt
+          uvicorn app:app --host 0.0.0.0 --port 5000 &
+      
+      - name: Start Frontend App
+        run: |
+          cd frontend
+          npm ci
+          npm start &
 
-      - name: Run Cypress E2E suite
+      - name: Wait for API & Frontend
+        run: |
+          npx wait-on http://localhost:5000/users
+          npx wait-on http://localhost:3000
+
+      - name: Run Cypress
         uses: cypress-io/github-action@v5
         with:
           browser: chrome
           record: false
+
+      - name: Tear down servers
+        if: always()
+        run: |
+          kill $(jobs -p) || true
